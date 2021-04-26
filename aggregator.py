@@ -161,24 +161,27 @@ if __name__ == '__main__':
         return p_list
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--path", type=str, help="main path for tensorboard files", default=os.getcwd())
+    parser.add_argument("--basepath", type=str, help="main path for tensorboard files", default=os.getcwd())
     parser.add_argument("--subpaths", type=param_list, help="subpath structures", default=['.'])
     parser.add_argument("--output", type=str, help="aggregation can be saved as tensorboard file (summary) or as table (csv)", default='summary')
 
     args = parser.parse_args()
 
-    path = Path(args.path)
+    basepath = Path(args.basepath)
+    basedirs = os.listdir(args.basepath)
 
-    if not path.exists():
-        raise argparse.ArgumentTypeError("Parameter {} is not a valid path".format(path))
+    for basedir in basedirs:
+        path = Path(str(basepath / basedir))
+        if not path.exists():
+            raise argparse.ArgumentTypeError("Parameter {} is not a valid path".format(path))
 
-    subpaths = [path / dname / subpath for subpath in args.subpaths for dname in os.listdir(path) if dname != FOLDER_NAME]
+        subpaths = [path / dname / subpath for subpath in args.subpaths for dname in os.listdir(path) if dname != FOLDER_NAME]
 
-    for subpath in subpaths:
-        if not os.path.exists(subpath):
-            raise argparse.ArgumentTypeError("Parameter {} is not a valid path".format(subpath))
+        for subpath in subpaths:
+            if not os.path.exists(subpath):
+                raise argparse.ArgumentTypeError("Parameter {} is not a valid path".format(subpath))
 
-    if args.output not in ['summary', 'csv']:
-        raise argparse.ArgumentTypeError("Parameter {} is not summary or csv".format(args.output))
+        if args.output not in ['summary', 'csv']:
+            raise argparse.ArgumentTypeError("Parameter {} is not summary or csv".format(args.output))
 
-    aggregate(path, args.output, args.subpaths)
+        aggregate(path, args.output, args.subpaths)
