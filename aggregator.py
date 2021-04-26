@@ -35,8 +35,11 @@ def extract(dpath, subpath):
 
     # Get and validate all scalar keys
     all_keys = [tuple(scalar_accumulator.Keys()) for scalar_accumulator in scalar_accumulators]
-    assert len(set(all_keys)) == 1, "All runs need to have the same scalar keys. There are mismatches in {}".format(all_keys)
-    keys = all_keys[0]
+    if len(set(all_keys)) > 1:
+        print("Runs do not have the same scalar keys. There are mismatches in {}. Resorting to common keys only".format(all_keys))
+        keys = tuple(set.intersection(*map(set, all_keys)))
+    else:
+        keys = all_keys[0]
 
     all_scalar_events_per_key = [[scalar_accumulator.Items(key) for scalar_accumulator in scalar_accumulators] for key in keys]
 
