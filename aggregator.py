@@ -17,11 +17,18 @@ from tensorboard.backend.event_processing.event_accumulator import EventAccumula
 from tensorflow.core.util.event_pb2 import Event
 
 FOLDER_NAME = 'aggregates'
+MODE = ['tf1', 'tf2'][1]
 
 
 def extract(dpath, subpath):
-    scalar_accumulators = [EventAccumulator(str(dpath / dname / subpath)).Reload(
-    ).scalars for dname in os.listdir(dpath) if dname != FOLDER_NAME]
+    if MODE == 'tf1':
+        scalar_accumulators = [EventAccumulator(str(dpath / dname / subpath)).Reload(
+        ).scalars for dname in os.listdir(dpath) if dname != FOLDER_NAME]
+    elif MODE == 'tf2':
+        scalar_accumulators = [EventAccumulator(str(dpath / dname / subpath), size_guidance={'tensors': 0}).Reload(
+        ).tensors for dname in os.listdir(dpath) if dname != FOLDER_NAME]
+    else:
+        raise ValueError()
 
     # Filter non event files
     scalar_accumulators = [scalar_accumulator for scalar_accumulator in scalar_accumulators if scalar_accumulator.Keys()]
@@ -48,8 +55,14 @@ def extract(dpath, subpath):
                           for all_scalar_events in all_scalar_events_per_key]
 
     # Get values per step per key
-    values_per_key = [[[scalar_event.value for scalar_event in scalar_events] for scalar_events in all_scalar_events]
-                      for all_scalar_events in all_scalar_events_per_key]
+    if MODE == 'tf1':
+        values_per_key = [[[scalar_event.value for scalar_event in scalar_events] for scalar_events in all_scalar_events]
+                        for all_scalar_events in all_scalar_events_per_key]
+    elif MODE == 'tf2':
+        values_per_key = [[[float(tf.make_ndarray(scalar_event.tensor_proto)) for scalar_event in scalar_events] for scalar_events in all_scalar_events]
+                        for all_scalar_events in all_scalar_events_per_key]
+    else:
+        raise ValueError()
 
     all_per_key = dict(zip(keys, zip(steps_per_key, wall_times_per_key, values_per_key)))
 
@@ -61,10 +74,15 @@ def aggregate_to_summary(dpath, aggregation_ops, extracts_per_subpath):
         for subpath, all_per_key in extracts_per_subpath.items():
             path = dpath / FOLDER_NAME / op.__name__ / dpath.name / subpath
             aggregations_per_key = {key: (steps, wall_times, op(values, axis=0)) for key, (steps, wall_times, values) in all_per_key.items()}
-            write_summary(path, aggregations_per_key)
+            if MODE == 'tf1':
+                write_summary_v1(path, aggregations_per_key)
+            elif MODE == 'tf2':
+                write_summary_v2(path, aggregations_per_key)
+            else:
+                raise ValueError()
 
 
-def write_summary(dpath, aggregations_per_key):
+def write_summary_v1(dpath, aggregations_per_key):
     writer = tf.summary.FileWriter(dpath)
 
     for key, (steps, wall_times, aggregations) in aggregations_per_key.items():
@@ -74,6 +92,19 @@ def write_summary(dpath, aggregations_per_key):
             writer.add_event(scalar_event)
 
         writer.flush()
+
+
+def write_summary_v2(dpath, aggregations_per_key):
+    with tf.compat.v1.Graph().as_default():
+        writer = tf.compat.v1.summary.FileWriter(dpath)
+
+        for key, (steps, wall_times, aggregations) in aggregations_per_key.items():
+            for step, wall_time, aggregation in zip(steps, wall_times, aggregations):
+                summary = tf.compat.v1.Summary(value=[tf.compat.v1.Summary.Value(tag=key, simple_value=aggregation)])
+                scalar_event = Event(wall_time=wall_time, step=step, summary=summary)
+                writer.add_event(scalar_event)
+
+            writer.flush()
 
 
 def aggregate_to_csv(dpath, aggregation_ops, extracts_per_subpath):
