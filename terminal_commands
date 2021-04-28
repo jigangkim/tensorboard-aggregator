@@ -1,0 +1,2 @@
+python aggregator.py --basepath /home/jgkim-larr/RL/rce/exp2/sawyer_drawer_open --subpaths "[\"train\", \"eval\"]" --output summary
+python aggregator.py --basepath /home/jgkim-larr/RL/rce/exp2/sawyer_push --subpaths "[\"train\", \"eval\"]" --output summary
